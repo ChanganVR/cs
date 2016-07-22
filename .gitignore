@@ -1,0 +1,13 @@
+Assets/
+Debug/
+*.dll
+*.jpg
+*.mtl
+*.obj
+nanosuit/
+*.zip
+MainMap/
+Textures/
+*.blend
+*.exp
+*vcxproj*
