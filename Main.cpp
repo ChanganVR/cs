@@ -1,4 +1,5 @@
 #include <iostream>
+#include <memory>
 
 // GLEW
 //#define GLEW_STATIC
@@ -20,6 +21,8 @@ using namespace glm;
 #include "Shader.h"
 #include "camera.h"
 #include "model.h"
+#include "Player.h"
+#include "TextRender.h"
 
 GLfloat deltaTime = 0.0f;
 GLfloat lastFrame = 0.0f;
@@ -33,11 +36,19 @@ void scroll_callback(GLFWwindow* window, double xpos, double ypos);
 // Window dimensions
 const GLuint WIDTH = 800, HEIGHT = 600;
 
+//mode 
+enum Mode {
+	FIRST_PERSPECTIVE,
+	THIRD_PERSPECTIVE
+};
+
 //camera
 GLfloat lastX = WIDTH / 2.0;
 GLfloat lastY = HEIGHT / 2.0;
 bool keys[1024];
-Camera camera;
+shared_ptr<Camera> current_camera;
+shared_ptr<Player> player_ptr;
+Mode view_mode = THIRD_PERSPECTIVE;
 
 //project_path
 string project_path = "D:\\Projects\\cs\\cs\\";
@@ -73,12 +84,25 @@ int main()
 
 	// Setup OpenGL options
 	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	// Build and compile our shader program
-	Shader shader("shader.vs", "shader.frag");
+	// Compile and setup the shader
+	Shader model_shader("model.vs", "model.frag");
+	Shader text_shader("text.vs", "text.frag");
+	
+	TextRender text_render;
+	text_render.load_font("arial.ttf");
 
+	//load scene model and player model
 	Model scene_model(project_path + "Sand_Final.obj");
-	Model player_model(project_path + "cube.obj");
+	shared_ptr<Player> player(new Player(project_path + "cube.obj"));
+	player_ptr = player;
+	if (view_mode == FIRST_PERSPECTIVE)
+		current_camera = static_pointer_cast<Camera>(player);
+	else
+		current_camera = make_shared<Camera>(player_ptr->get_position());
 
 	// Game loop
 	while (!glfwWindowShouldClose(window))
@@ -92,33 +116,44 @@ int main()
 		glClearColor(1.0f, 1.0f, 1.0f, 0.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		// Activate shader
-		shader.Use();
+		//// Activate shader
+		model_shader.Use();
 
 		// Create transformations
 		glm::mat4 view;
-		view = camera.GetView();
+		view = current_camera->GetView();
 		// Note: currently we set the projection matrix each frame, but since the projection matrix rarely changes it's often best practice to set it outside the main loop only once.
 		glm::mat4 projection;
-		projection = glm::perspective(camera.GetAspect(), (GLfloat)WIDTH / (GLfloat)HEIGHT, 0.1f, 100.0f);
+		projection = glm::perspective(current_camera->GetAspect(), (GLfloat)WIDTH / (GLfloat)HEIGHT, 0.1f, 100.0f);
 		// Get their uniform location
-		GLint viewLoc = glGetUniformLocation(shader.Program, "view");
-		GLint projLoc = glGetUniformLocation(shader.Program, "projection");
+		GLint viewLoc = glGetUniformLocation(model_shader.Program, "view");
+		GLint projLoc = glGetUniformLocation(model_shader.Program, "projection");
 		// Pass them to the shaders
 		glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
 		glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
 		// Draw the loaded model
 		glm::mat4 model;
-		model = glm::translate(model, glm::vec3(0.0f, -1.75f, 0.0f)); // Translate it down a bit so it's at the center of the scene
-		model = glm::scale(model, glm::vec3(0.2f, 0.2f, 0.2f));	// It's a bit too big for our scene, so scale it down
-		glUniformMatrix4fv(glGetUniformLocation(shader.Program, "model"), 1, GL_FALSE, glm::value_ptr(model));
-		scene_model.Draw(shader);
+		model = glm::translate(model, vec3(0,-1.5,0)); // Translate it down a bit so it's at the center of the scene
+		glUniformMatrix4fv(glGetUniformLocation(model_shader.Program, "model"), 1, GL_FALSE, glm::value_ptr(model));
+		scene_model.Draw(model_shader);
 
-		model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
-		glUniformMatrix4fv(glGetUniformLocation(shader.Program, "model"), 1, GL_FALSE, glm::value_ptr(model));
-		player_model.Draw(shader);
+		//draw player
+		if (view_mode == FIRST_PERSPECTIVE)
+		{
+			glm::mat4 model;
+			model = glm::translate(model, player->get_position() + vec3(10, 0, 0)); // Translate it down a bit so it's at the center of the scene
+			model = glm::scale(model, glm::vec3(0.05f, 0.05f, 0.05f));	// It's a bit too big for our scene, so scale it down
+			glUniformMatrix4fv(glGetUniformLocation(model_shader.Program, "model"), 1, GL_FALSE, glm::value_ptr(model));
+			player->draw(model_shader);
+		}
 
+		//render text 
+		text_shader.Use();
+		projection = glm::ortho(0.0f, static_cast<GLfloat>(WIDTH), 0.0f, static_cast<GLfloat>(HEIGHT));
+		glUniformMatrix4fv(glGetUniformLocation(text_shader.Program, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+		text_render.draw(text_shader, "hello world", 25.0f, 25.0f, 1, vec3(0.5f, 0.8f, 0.2f));
+		
 		// Swap the screen buffers
 		glfwSwapBuffers(window);
 
@@ -136,26 +171,37 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 {
 	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, GL_TRUE);
-
+	if (key == GLFW_KEY_P && action == GLFW_PRESS)
+	{
+		if (view_mode == FIRST_PERSPECTIVE)
+		{
+			view_mode = THIRD_PERSPECTIVE;
+			current_camera = make_shared<Camera>(player_ptr->get_position());
+		}
+		else
+		{
+			view_mode = FIRST_PERSPECTIVE;
+			current_camera = static_pointer_cast<Camera>(player_ptr);
+		}
+	}
 	if (action == GLFW_PRESS)
 		keys[key] = true;
 	if (action == GLFW_RELEASE)
 		keys[key] = false;
-
-	if (key == GLFW_KEY_UP)
-		;
 }
 
 void do_movement()
 {
 	if (keys[GLFW_KEY_W])
-		camera.KeyMouse(FORWARD, deltaTime);
+		current_camera->KeyMove(FORWARD, deltaTime);
 	if (keys[GLFW_KEY_S])
-		camera.KeyMouse(BACKWORD, deltaTime);
+		current_camera->KeyMove(BACKWORD, deltaTime);
 	if (keys[GLFW_KEY_A])
-		camera.KeyMouse(LEFT, deltaTime);
+		current_camera->KeyMove(LEFT, deltaTime);
 	if (keys[GLFW_KEY_D])
-		camera.KeyMouse(RIGHT, deltaTime);
+		current_camera->KeyMove(RIGHT, deltaTime);
+	if (keys[GLFW_KEY_SPACE])
+		current_camera->KeyMove(JUMP, deltaTime);
 }
 
 bool firstMouse = true;
@@ -172,10 +218,10 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 	lastX = xpos;
 	lastY = ypos;
 
-	camera.MouseMove(xoffset, yoffset);
+	current_camera->MouseMove(xoffset, yoffset);
 }
 
 void scroll_callback(GLFWwindow* window, double xpos, double ypos)
 {
-	camera.Zoom(ypos);
+	current_camera->Zoom(ypos);
 }

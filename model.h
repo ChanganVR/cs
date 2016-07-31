@@ -128,7 +128,7 @@ private:
 				vertex.TexCoords = glm::vec2(0.0f, 0.0f);
 			vertices.push_back(vertex);
 		}
-		// Now wak through each of the mesh's faces (a face is a mesh its triangle) and retrieve the corresponding vertex indices.
+		// Now walk through each of the mesh's faces (a face is a mesh its triangle) and retrieve the corresponding vertex indices.
 		for (GLuint i = 0; i < mesh->mNumFaces; i++)
 		{
 			aiFace face = mesh->mFaces[i];
@@ -194,9 +194,6 @@ private:
 		return textures;
 	}
 };
-
-
-
 
 GLint TextureFromFile(const char* path, string directory)
 {

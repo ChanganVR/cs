@@ -11,35 +11,39 @@ enum MOVEMENTS {
 	BACKWORD,
 	LEFT,
 	RIGHT,
+	JUMP,
+	SQUAT,
+	SLOW
 };
 
 const GLfloat kZoomSensitivity = 0.05;
 const GLfloat kMouseMoveSensitivity = 0.05;
-const GLfloat kCamSpeed = 5.0;
+const GLfloat kCamSpeed = 20.0;
 const GLfloat kFlyViewEnabled = true;
 
 
 class Camera {
-private:
-	vec3 position_ = vec3(0,0,3);
-	vec3 front_ = vec3(0,0,-1);
-	vec3 up_ = vec3(0,1,0);
-	GLfloat yaw_ = -90;
-	GLfloat pitch_ = 0;
-	GLfloat aspect_ = 45;
+protected:
+	vec3 position_;
+	vec3 front_;
+	vec3 up_;
+	GLfloat yaw_;
+	GLfloat pitch_;
+	GLfloat aspect_;
 public:
-	Camera() {
-
+	Camera(vec3 position = vec3(0, 0, 3), vec3 front = vec3(0, 0, -1), vec3 up = vec3(0, 1, 0),
+		GLfloat yaw = -90, GLfloat pitch = 0, GLfloat aspect = 45) :
+		position_(position), front_(front), up_(up), yaw_(yaw), pitch_(pitch), aspect_(aspect) {
 	}
-	mat4 GetView()
+	virtual mat4 GetView()
 	{
 		return glm::lookAt(position_, position_ + front_, up_);
 	}
-	GLfloat GetAspect() 
+	virtual GLfloat GetAspect() 
 	{ 
 		return aspect_; 
 	}
-	void Zoom(double ypos)
+	virtual void Zoom(double ypos) 
 	{
 		ypos *= kZoomSensitivity;
 		if (aspect_ >= 1.0 && aspect_ <= 45.0)
@@ -49,7 +53,7 @@ public:
 		else if (aspect_ >= 45.0)
 			aspect_ = 45.0;
 	}
-	void MouseMove(GLfloat xoffset, GLfloat yoffset)
+	virtual void MouseMove(GLfloat xoffset, GLfloat yoffset)
 	{
 		xoffset *= kMouseMoveSensitivity;
 		yoffset *= kMouseMoveSensitivity;
@@ -68,7 +72,7 @@ public:
 		front.z = sin(radians(yaw_)) * cos(radians(pitch_));
 		front_ = normalize(front);
 	}
-	void KeyMouse(MOVEMENTS direction, GLfloat deltaTime)
+	virtual void KeyMove(MOVEMENTS direction, GLfloat deltaTime)
 	{
 		GLfloat currentSpeed = kCamSpeed * deltaTime;
 		switch (direction)
